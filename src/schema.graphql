@@ -12,8 +12,17 @@ prisma.graphql file so we don't have to re define them here!
 
 type Mutation {
   createItem(title: String, description: String,  price: Int, image: String, largeImage: String): Item!
+
+  # TODO Add image upload to the update function
+  updateItem(id: ID!, title: String, description: String, price: Int): Item!
+
+  deleteItem(id: ID!): Item
 }
 
 type Query {
   items: [Item]!
-}
+
+  # ItemWhereUniqueInput is one of the where's that prisma creates
+  # with this we could query by any unique input e.g. email
+  item(where: ItemWhereUniqueInput!): Item #no ! here because otherwise it would error if no item is found
+} 

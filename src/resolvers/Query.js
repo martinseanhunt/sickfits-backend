@@ -8,8 +8,8 @@ const Query = {
     return items
   }
   Or can use the below if it's just passing the query on with no custom logic*/ 
-  items: forwardTo('db')
-
+  items: forwardTo('db'),
+  item: forwardTo('db')
 };
 
 module.exports = Query;
