@@ -20,9 +20,11 @@ type Mutation {
 }
 
 type Query {
-  items: [Item]!
+  items(where: ItemWhereInput, orderBy: ItemOrderByInput, skip: Int, first: Int): [Item]!
 
   # ItemWhereUniqueInput is one of the where's that prisma creates
   # with this we could query by any unique input e.g. email
   item(where: ItemWhereUniqueInput!): Item #no ! here because otherwise it would error if no item is found
+
+  itemsConnection(where: ItemWhereInput): ItemConnection!
 } 
