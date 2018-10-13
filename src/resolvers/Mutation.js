@@ -1,6 +1,14 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 
+const cookieSettings = {
+  // Stops JS applications from being able to read the cookie / JWT content
+  // Otherwise A rogue chrome plugin etc could grab the JWT and then 
+  // authenticate as you until the token expires
+  httpOnly: true, 
+  maxAge: 1000 * 60 * 60 *24 * 365, // 1 year cookie
+}
+
 const Mutations = {
   async createItem(parent, args, ctx, info) {
     // TODO Check if they are logged in!
@@ -73,20 +81,51 @@ const Mutations = {
     }, info)
 
     // Create a JWT so we can sign the user in right away
-    const token = jwt.sign({ userId: user.id, name: user.name, email: user.email }, process.env.APP_SECRET)
+    const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET)
 
     // Set JWT as a cookie on the response
-    context.response.cookie('token', token, {
-      // Stops JS applications from being able to read the cookie / JWT content
-      // Otherwise A rogue chrome plugin etc could grab the JWT and then 
-      // authenticate as you until the token expires
-      httpOnly: true, 
-      maxAge: 1000 * 60 * 60 *24 * 365, // 1 year cookie
-    })
+    context.response.cookie('token', token, cookieSettings)
 
     // Finally return the user to the browser
     return user
+  },
+
+  async signin(parent, {email, password}, context, info) {
+    // Check if there is a user with the email
+    const user = await context.db.query.user({
+      where: { email: email }
+    }, info)
+
+    if (!user) {
+      // do we need to clear the users coookie here if it alreadt exists? 
+      throw new Error('no user found')
+    }
+    
+    // Check if the password is correct
+    const validPass = await bcrypt.compare(password, user.password)
+
+    if (!validPass) {
+      // do we need to clear the users coookie here if it alreadt exists? 
+      throw new Error('Wrong password fool')
+    }
+
+    // generate JWT
+    const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET)
+
+    // Set the cookie
+    context.response.cookie('token', token, cookieSettings)
+
+    // return the user
+    return user
+  },
+
+  signout(parent, args, context, info) {
+    context.response.clearCookie('token')
+
+    return { message: 'Success' }
   }
-};
+}
+
+
 
 module.exports = Mutations;
