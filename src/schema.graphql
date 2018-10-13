@@ -6,17 +6,16 @@ Each Query or mutation needs to line up with a resolver
 ===================
 
 This imports all the types that we reference below that exist in the geneated
-prisma.graphql file so we don't have to re define them here!
+prisma.graphql file so we don't have to re define them here before we retun them!
 """
 # import * from './generated/prisma.graphql'
 
 type Mutation {
   createItem(title: String, description: String,  price: Int, image: String, largeImage: String): Item!
-
   # TODO Add image upload to the update function
   updateItem(id: ID!, title: String, description: String, price: Int): Item!
-
   deleteItem(id: ID!): Item
+  signup(email: String!, password: String!, name: String!): User!
 }
 
 type Query {
