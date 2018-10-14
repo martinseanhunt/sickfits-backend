@@ -31,7 +31,8 @@ type Query {
   # with this we could query by any unique input e.g. email
   item(where: ItemWhereUniqueInput!): Item #no ! here because otherwise it would error if no item is found
   itemsConnection(where: ItemWhereInput): ItemConnection!
-  me: User
+  me: User,
+  users: [User]!
 } 
 
 type SuccessMessage {

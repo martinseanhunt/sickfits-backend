@@ -33,6 +33,17 @@ server.express.use((req, res, next) => {
   next()
 })
 
+// Middleware to then get the user object on each request
+// Do we really want to do this... Do all queries need the user if they're logged in
+// Could it effect performance since it's always creating an extra db call? 
+server.express.use(async (req, res, next) => {
+  if (!req.userId) return next()
+
+  req.user = await db.query.user({  where: { id:  req.userId }}, '{ id, permissions, name, email}')
+  next()
+})
+
+
 server.start({
   cors: {
     credentials: true, 
