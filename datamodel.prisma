@@ -15,6 +15,7 @@ type User {
   resetToken: String @unique
   resetTokenExpiry: Float
   permissions: [Permission]
+  cart: [CartItem!]! #Prisma will automagically hook this up and inset the cart item id's where a relationship is created
 }
 
 type Item {
@@ -27,4 +28,11 @@ type Item {
   createdAt: DateTime! """Not a standard graph QL type, feature of Prisma"""
   updatedAt: DateTime!
   user: User!
+}
+
+type CartItem {
+  id: ID! @unique,
+  quantity: Int! @default(value: 1)
+  item: Item #relationsip to item - no ! here otherwise we can't delete the item if it's in someones cart
+  user: User! #relationsip to item
 }

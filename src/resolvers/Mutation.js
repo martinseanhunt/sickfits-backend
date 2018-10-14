@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken')
 const { randomBytes } = require('crypto')
 const { promisify } = require('util')
 
+const { hasPermission } = require('../utils')
+
 const {transport, makeNiceEmail} = require('../mail')
 
 const cookieSettings = {
@@ -54,12 +56,27 @@ const Mutations = {
   },
 
   async deleteItem(parent, args, context, info) { 
-    const where = { id: args.id }
+    // Check if login
+    if(!context.request.userId) throw new Error('Login required')
 
     // find the item
-    const item = await context.db.query.item({ where }, `{ id, title }`)
+    const where = { id: args.id }
+    const item = await context.db.query.item({ where }, `{ id, title, user{ id } }`)
+
     // check if they own it or have permissions
-    // TODO
+    const ownsItem = item.user.id === context.request.userId
+
+    // not using utility function here because the utility function will throw an error
+    // and we want to throw it here - could refactor the utility function to optionally
+    // Not throw an error and return a bool
+
+    // .some() checks if at least 1 iteration evaluates to true and returns a bool
+    
+    const hasPermissions = context.request.user.permissions
+      .some(permission => ['ADMIN', 'ITEMDELETE'].includes(permission))
+
+    if (! (ownsItem || hasPermissions)) throw new Error('you dont have permission to do this')
+
     // delete it
     return context.db.mutation.deleteItem({ where }, info)
   },
@@ -221,6 +238,84 @@ const Mutations = {
     
     // Return new user
     return res
+  },
+
+  async updatePermissions (parent, args, context, info) {
+    // Check if user is logged in
+    if(!context.request.userId) throw new Error('You must be logged in')
+
+    // get the current user
+    const user = context.request.user
+
+    // check if they have permissions to do this
+    const hasPermission = (user, ['ADMIN', 'PERMISSIONUPDAATE'])
+
+    // update permissions
+    // Because permissions is its own enum we have to use
+    // set: to set the updated permissions from args 
+    // I don't fully understasnd this - set comes from prisma
+    return context.db.mutation.updateUser({ 
+      data: { permissions: { set: args.permissions } },
+      where: { id: args.userId }
+     }, info)
+  },
+
+  async addToCart (parent, args, context, info) {
+    // Make sure that user is signed in
+    const userId = context.request.userId
+    if(!userId) throw new Error('Please sign in')
+
+    // Query current cart for item we're trying to add
+    // [variablename] destructures the first item in an array to a new array
+    // There should only ever be one result returned from this query
+    const [existingCartItem] = await context.db.query.cartItems({
+      where: {
+        user: {id: userId},
+        item: {id: args.id}
+      }
+    }, info)
+
+    // if item is in the cart if it is increment by1
+    if(existingCartItem){
+      console.log('already in cart')
+      return context.db.mutation.updateCartItem({
+        where: { id: existingCartItem.id },
+        data: { quantity: existingCartItem.quantity + 1 }
+      }, info)
+    } 
+
+    // 4 Otherwise create a fresh cart item
+    console.log('new item')
+    return context.db.mutation.createCartItem({
+      data: {
+        user: { connect: { id: userId } },
+        item: { connect: { id: args.id } }
+      }
+    }, info)
+
+    // Is prisma automatically adding the cartItem id's in to the cart field on the User type? 
+
+  },
+
+  async removeFromCart(parent, args, context, info) {
+    const userId = context.request.userId
+    if(!userId) throw new Error('You need to be logged in')
+
+    // find the cart item
+    // If we want to query specific stuff that isn't asked for by the frontend
+    // i.e. populating relationships we need to pass a manual query instead of info
+    const cartItem = await context.db.query.cartItem({
+      where: { id: args.id }
+    }, `{ id, user { id } }`)
+    if(!cartItem) throw new Error('Item not found in cart')
+
+    // make sure they own it
+    if(cartItem.user.id !== userId) throw new Error('You need to own this item to delete it')
+
+    // delete cart item and return it 
+    return context.db.mutation.deleteCartItem({
+      where: { id: args.id }
+    }, info)
   }
 }
 
