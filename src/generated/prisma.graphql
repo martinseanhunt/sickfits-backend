@@ -1,5 +1,5 @@
 # source: https://us1.prisma.sh/martin-hunt-925e21/sickfits/dev
-# timestamp: Sat Oct 13 2018 08:59:10 GMT-0700 (Pacific Daylight Time)
+# timestamp: Sat Oct 13 2018 17:27:58 GMT-0700 (Pacific Daylight Time)
 
 type AggregateItem {
   count: Int!
@@ -848,4 +848,5 @@ input UserWhereInput {
 input UserWhereUniqueInput {
   id: ID
   email: String
+  resetToken: String
 }

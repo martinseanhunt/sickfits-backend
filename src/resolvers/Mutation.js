@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { randomBytes } = require('crypto')
+const { promisify } = require('util')
 
 const cookieSettings = {
   // Stops JS applications from being able to read the cookie / JWT content
@@ -10,6 +12,9 @@ const cookieSettings = {
 }
 
 const Mutations = {
+  // DON'T PASS INFO IF YOU WANT ALL THE DETAILS BACK FROM THE DATABASE
+  // TO USE ON SERVER
+
   async createItem(parent, args, ctx, info) {
     // TODO Check if they are logged in!
 
@@ -54,6 +59,8 @@ const Mutations = {
   },
 
   async signup(parent, args, context, info) {
+    // Do one check of old Vidly project before implementing this strategy in prod
+
     // The rason that we're using cookies instead of localstorage is so that we can SSR
     // if we were using localstorage the server rendering the front end wouldn't have access to the 
     // JWT in order to pass it along to our back end!
@@ -92,14 +99,17 @@ const Mutations = {
 
   async signin(parent, {email, password}, context, info) {
     // Check if there is a user with the email
+    
     const user = await context.db.query.user({
       where: { email: email }
-    }, info)
+    })
 
     if (!user) {
       // do we need to clear the users coookie here if it alreadt exists? 
       throw new Error('no user found')
     }
+
+    console.log(user)
     
     // Check if the password is correct
     const validPass = await bcrypt.compare(password, user.password)
@@ -123,8 +133,81 @@ const Mutations = {
     context.response.clearCookie('token')
 
     return { message: 'Success' }
+  },
+
+  async requestReset(parent, args, context, info) {
+    // Check if this is a real user
+    const user = await context.db.query.user({ where: { email: args.email } })
+    if(!user) throw new Error('There aint no user with that email')
+
+    // Set a reset token and expirry
+    // have to promisify randomBytes as it requires a callback by default
+    // randomBytes returns a buffer so toString will create a usable string
+    const resetToken = (await promisify(randomBytes)(20)).toString('hex')
+    const resetTokenExpiry = Date.now() + 3600000 // 1 hour from now
+    
+    const res = await context.db.mutation.updateUser({
+      where: { email: args.email },
+      data: { resetToken, resetTokenExpiry }
+    })
+
+    console.log(res)
+
+    // Email them the reset token
+    return { message: 'Success' }
+  },
+
+  async resetPassword(parent, args, context, info) {
+    const { password, confirmPassword, resetToken } = args
+
+    // check if  the passwords match
+    if (password !== confirmPassword) throw new Error('Passwords must match')
+    // check if it's a legit resettoken
+    // Checking for user via the token itself but could also do via email
+    // not using es6 shortuts here just for ultra clarity while I'm solidifying prisma knowledge
+
+    // Could also do it this way if I didn't set token to unique
+    // This was my solution bcause I set token to unique
+    // user = await context.db.query.user({ where: { resetToken: resetToken } })
+
+    // Wes did it differntly
+    const [user] = await context.db.query.users({ 
+      where: { 
+        resetToken: resetToken,
+        resetTokenExpiry_gte: Date.now()
+      } 
+    })
+
+    if(!user) throw new Error('Token invalid or expired')
+    
+    // my method
+    // if(user.resetToken !== resetToken) throw new Error('INvalid token')
+  
+    // check if it's expired
+    // my solution below. WEs did it above in the query
+    // if(user.resetTokenExpiry < Date.now()) throw new Error('INvalid token')
+
+    // Hash new password
+    const hash = await bcrypt.hash(password, 10)
+  
+    // Save new password to the user and remove reset token / expiry
+    const res = await context.db.mutation.updateUser({
+      where: { resetToken },
+      data: { password: hash, resetToken: null, resetTokenExpiry: null }
+    })
+
+    // Generate JWT
+    const token = jwt.sign({ userId: user.id}, process.env.APP_SECRET)
+  
+    // Set JWT cookie 
+    context.response.cookie('token', token, cookieSettings)
+    
+    // Return new user
+    return res
   }
 }
+
+
 
 
 
