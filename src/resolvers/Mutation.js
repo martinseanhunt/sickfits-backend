@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken')
 const { randomBytes } = require('crypto')
 const { promisify } = require('util')
 
+const {transport, makeNiceEmail} = require('../mail')
+
 const cookieSettings = {
   // Stops JS applications from being able to read the cookie / JWT content
   // Otherwise A rogue chrome plugin etc could grab the JWT and then 
@@ -13,16 +15,20 @@ const cookieSettings = {
 
 const Mutations = {
   // DON'T PASS INFO IF YOU WANT ALL THE DETAILS BACK FROM THE DATABASE
-  // TO USE ON SERVER
+  // TO USE SOLELY ON  THE SERVER
 
   async createItem(parent, args, ctx, info) {
-    // TODO Check if they are logged in!
+    // Check if they are logged in!
+    if(!ctx.request.userId) throw new Error('You need to be logged in to do that')
 
     /// We could just return the function and Yoga knows to wait before returning
     // but it can help to store the result first if you need to console.log etc
     const item = await ctx.db.mutation.createItem({
       data: {
-        ...args
+        ...args,
+        user: {
+          connect: { id: ctx.request.userId } // connects to User item via ID, can use any unique identifier
+        }
       }
     }, info) // info is passed as a second argument because it contains our request detauils which specify what gets returned from the server
 
@@ -154,6 +160,17 @@ const Mutations = {
     console.log(res)
 
     // Email them the reset token
+    const mailRes = await transport.sendMail({
+      from: 'flippy@tripper.com',
+      to: user.email,
+      subject: 'Reset your password',
+      html: makeNiceEmail(`your password reset token is here! \n\n <a href="${process.env.FRONTEND_URL}/reset?resetToken=${resetToken}">Click here to reset</a>`)
+    })
+
+    // Need to throw error if error with mail this goes for all these await operations 
+    // - need to find a better way than writing try catch blocks
+    // for every single query
+
     return { message: 'Success' }
   },
 
