@@ -28,6 +28,8 @@ type Mutation {
 }
 
 type Query {
+  """" ItemWhereInput etc being imported from prisma.gql not usre if this is secure...
+  and wat is being exposed to search by... Would it be better to write my own ItemWhereInput?"""
   items(where: ItemWhereInput, orderBy: ItemOrderByInput, skip: Int, first: Int): [Item]!
 
   # ItemWhereUniqueInput is one of the where's that prisma creates
