@@ -55,4 +55,7 @@ type Order {
   total: Int,
   user: User!, 
   charge: String! #coming back from stripe!
+  createdAt: DateTime! # these fields are always set by prisma but we need to 
+  updatedAt: DateTime! # set them explicitly here in order to expose to other parts of the app
+  # I wonder f I coudld expose them in schema.graphql instead? or if it needs to be here? 
 }

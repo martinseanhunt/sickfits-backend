@@ -35,6 +35,37 @@ const Query = {
     console.log(permissions)
     // if they do, query all the usrs!
     return context.db.query.users({}, info)
+  },
+  order: async (parent, args, context, info) => {
+    // make sure logged in
+    const userId = context.request.userId
+    if(!userId) throw new Error('error')
+
+    // query current order
+    const order = await context.db.query.order({
+      where: { id: args.id }
+    }, info)
+
+    // check permissinos to see this order
+    const ownsOrder = order.user.id === userId
+    const hasPemissionToSeeOrder = context.request.user.permissions.includes('ADMIN')
+
+    if(!order && !hasPemissionToSeeOrder) throw new Error('You cant see this son')
+
+    // return the order
+    return order
+  },
+  orders: async (parent, args, context, info) => {
+    // Check for login
+    const userId = context.request.userId
+    if (!userId) throw new Error('Needs login')
+
+    console.log('hello')
+
+    // return orders for that user
+    return context.db.query.orders({
+      where: { user: { id: userId } }
+    }, info)
   }
 };
 
