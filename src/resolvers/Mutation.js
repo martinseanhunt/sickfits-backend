@@ -4,6 +4,7 @@ const { randomBytes } = require('crypto')
 const { promisify } = require('util')
 
 const { hasPermission } = require('../utils')
+const stripe = require('../stripe')
 
 const {transport, makeNiceEmail} = require('../mail')
 
@@ -316,6 +317,89 @@ const Mutations = {
     return context.db.mutation.deleteCartItem({
       where: { id: args.id }
     }, info)
+  },
+
+  async createOrder(parent, args, context, info) {
+    // query the current user and make sure they are signed in
+    const userId = context.request.userId
+    if(!userId) throw new Error('Need to be logged in')
+
+    // not pulling this from context as it needs to query multiple layers deep
+    // in to relationships
+    const user = await context.db.query.user({ where: { id: userId } },`
+      {
+        id
+        name
+        email
+        cart {
+          id
+          quantity
+          item {
+            price
+            id
+            description
+            image
+            title
+          }
+        }
+      }
+    `)
+
+    // recalculate the total for the price - for security
+    const amount = user.cart.reduce((tally, cartItem) => tally + (cartItem.quantity * cartItem.item.price) ,0)
+
+    // create the stripe charge
+    const charge = await stripe.charges
+      .create({
+        amount,
+        currency: 'USD',
+        source: args.token
+      })
+      .catch(e => {
+        throw new Error(e)
+      })
+
+    // convert cart items to order items
+    const orderItems = user.cart.map(cartItem => {
+      // creating the new OrderItem that maps to the OrderItem defined in datamodel
+      // jsut need to create javascript objects which prisma will convert in to the real deal
+      // when we call "create" when setting the items: orderItems in our Order
+      const orderItem = {
+        quantity: cartItem.quantity,
+        user: { connect: { id: userId } }, // remember to use connect wrhn creating relationships
+        ...cartItem.item // speading the cartitem.item fields in here - remember this will copy the ID which we don't want so we'll have to remove it
+      }
+      delete orderItem.id // don't need these
+      delete orderItem.largeImage // don't need these
+      return orderItem
+    })
+
+    console.log(orderItems)
+
+    // create order
+    const order = await context.db.mutation.createOrder({
+      data: {
+        total: charge.amount,
+        charge: charge.id,
+        items: { create: orderItems }, // takes our js objects and creates all the orderItems and sticks them in the array
+        user: { connect: { id: userId } }
+      }
+    })
+
+    // clear users cart by deleting CartItems... The users cart field will be
+    // auto cleared because it's a relationship managed by prisma
+
+    // get array of all cartItem Id's that are in an array on the user->cart  
+    const cartItemIds = user.cart.map(cartItem => cartItem.id)
+
+    await context.db.mutation.deleteManyCartItems({
+      // Delete all the cartItems with id in the above array
+      // id_in says is the object id in the array we provide
+      where: { id_in: cartItemIds }
+    })
+
+    // Return order to client
+    return order
   }
 }
 

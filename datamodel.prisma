@@ -36,3 +36,23 @@ type CartItem {
   item: Item #relationsip to item - no ! here otherwise we can't delete the item if it's in someones cart
   user: User! #relationsip to item
 }
+
+# Everything about the item needs to be cemented here rather than creating a relationship to an Item 
+# if the item were to be deleted we don't want to lost the history of what was paid etc!
+type OrderItem {
+  id: ID! @unique,  
+  title: String!,
+  description: String!, 
+  image: String!, 
+  price: Int!, 
+  quantity: Int! @default(value:1)
+  user: User
+}
+
+type Order {
+  id: ID! @unique, 
+  items: [OrderItem!]!,
+  total: Int,
+  user: User!, 
+  charge: String! #coming back from stripe!
+}
